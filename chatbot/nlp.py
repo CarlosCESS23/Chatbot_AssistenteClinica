@@ -1,6 +1,22 @@
+
+"""
+Utilização da linguagem natural 
+para  analisar os sintomas descritos pelo usuário. 
+"""
+
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+
+
+try:
+    stopwords.words('portuguese')
+except LookupError:
+    nltk.download('stopwords')
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
 
 #Listas de palavras comuns em português para ignorar
@@ -10,21 +26,15 @@ PARAVRAS_COMUNS = set(stopwords.words('portuguese'))
 #Base de conhecimento de sintomas e condições de casos leves:
 
 SINTOMAS_CHAVE = {
-    "febre", "calafrio", "calafrios",
-    "tosse", "espirro", "espirros",
-    "dor de cabeça", "enxaqueca", "cefaleia",
-    "dor de garganta", "garganta inflamada",
-    "coriza", "nariz escorrendo",
-    "congestão nasal", "nariz entupido",
-    "dor no corpo", "dores no corpo", "mialgia",
-    "cansaço", "fadiga", "fraqueza", "moleza",
-    "falta de ar", "dificuldade para respirar",
-    "dor no peito", "aperto no peito",
-    "náusea", "enjoo", "vômito", "vomitar",
-    "diarreia",
-    "dor abdominal", "dor de barriga",
-    "tontura",
-    "perda de olfato", "perda de paladar"
+    "febre", "calafrio", "calafrios", "tosse", "espirro", "espirros",
+    "dor de cabeça", "enxaqueca", "cefaleia", "dor de garganta",
+    "garganta inflamada", "coriza", "nariz escorrendo", "congestão nasal",
+    "nariz entupido", "dor no corpo", "dores no corpo", "mialgia",
+    "cansaço", "fadiga", "fraqueza", "moleza", "falta de ar",
+    "dificuldade para respirar", "dor no peito", "aperto no peito",
+    "náusea", "enjoo", "vômito", "vomitar", "diarreia",
+    "dor abdominal", "dor de barriga", "tontura", "perda de olfato",
+    "perda de paladar"
 }
 
 def extrair_sintomas(texto) -> list[str]:
