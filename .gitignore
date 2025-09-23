@@ -8,3 +8,17 @@
 venv/
 __pycache__/
 *.pyc
+
+Arquivos de ambiente
+.env
+
+Banco de dados SQLite
+*.db
+*.db-journal
+
+Arquivos de cache do Python
+pycache/
+*.pyc
+
+Outros
+.vscode/
