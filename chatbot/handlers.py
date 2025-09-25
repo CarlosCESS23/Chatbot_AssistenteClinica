@@ -53,36 +53,53 @@ async def prompt_for_symptoms(update: Update, context: ContextTypes.DEFAULT_TYPE
 # Passo 3: Usuário digita os sintomas, e após disso a função é chamada
 
 async def analyze_symptoms(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-
-    # Isso processa a MENSAGEM DE TEXTO com os sintomas do usuário
-    texto_usuario = update.message.text
-    chat_id = update.message.chat_id
-
-
-    await context.bot.send_chat_action(chat_id=update.message.chat_id, action=telegram.constants.ChatAction.TYPING)
+    """Analisa os sintomas usando a IA com um prompt aprimorado e salva no banco."""
+    user = update.message.from_user
+    symptoms = update.message.text
     
+    # MODIFICAÇÃO 1: Mensagem de espera um pouco mais amigável.
+    await update.message.reply_text(
+        "Obrigado por compartilhar. Estou analisando suas informações com cuidado... 🤔"
+    )
+
+    # MODIFICAÇÃO 2 (A PRINCIPAL): O prompt foi completamente reescrito.
+    # Agora ele define uma persona, um tom de voz e a estrutura da resposta.
+    prompt = f"""
+    **Sua Persona:** Você é um assistente de triagem virtual. Seu tom deve ser calmo, empático, profissional e muito acolhedor. Você NUNCA deve alarmar o paciente.
+
+    **Tarefa:** Analise os sintomas de um paciente e forneça uma resposta amigável e informativa.
+
+    **Sintomas do Paciente:** "{symptoms}"
+
+    **Formato da sua resposta:**
+    1.  Comece com uma saudação calorosa, como "Olá! Agradeço por confiar em mim para compartilhar como você está se sentindo."
+    2.  Apresente a análise de forma didática, explicando o que os sintomas podem sugerir. Use uma linguagem simples.
+    3.  Apresente as sugestões (médico, exames) como recomendações para uma conversa com um profissional de verdade.
+    4.  **AVISO OBRIGATÓRIO:** Termine SEMPRE com o seguinte aviso, exatamente como está escrito:
+        "**Atenção:** Eu sou uma inteligência artificial e esta análise é uma sugestão baseada nas informações que você forneceu. Ela não substitui uma consulta médica de verdade. Por favor, procure um médico para obter um diagnóstico preciso e um tratamento adequado."
+    """
+    
+    # MODIFICAÇÃO 3: Adicionado tratamento de erros para robustez.
     try:
-        sintomas_identificado = sintomas.extrair_sintomas(update.message.text)
-        logger.info(f'Sintomas identificados: {update.message.chat_id} - {sintomas_identificado}')
-        prompt_for_symptoms = f"""
+        logging.info(f"Enviando prompt para a IA para o usuário {user.id}")
+        generation_result = model.generate_content(prompt)
+        ai_response = generation_result.text
 
+        database.inserir_consulta(user.id, user.first_name, symptoms, ai_response)
+        logging.info(f"Consulta salva para o usuário {user.id}")
 
-        pergunta do usuário: {texto_usuario}
-        Sintomas identificados pelo análise de NLTK: **{sintomas_identificado}**
-
-        Agora, gere uma resposta de orientação segindo as regras do sistema.
-        """
-        reponse = model.generate_content(prompt_for_symptoms)
-
-        await update.message.reply_text(reponse.text,parse_mode="Markdown")
+        await update.message.reply_text(ai_response, reply_markup=ReplyKeyboardRemove())
 
     except Exception as e:
-        logger.error(f'Erro ao processar a mensagem do usuário {chat_id} - {e}')
-        await update.message.reply_text("Desculpe, ocorreu um erro ao processar sua mensagem, tente novamente mais tarde.")
-
-        await update.message.reply_text("Se precisar de mais alguma coisa, digite /start para ver as opções novamente. 😊")
-
+        logging.error(f"Erro ao processar sintomas para o usuário {user.id}: {e}", exc_info=True)
+        await update.message.reply_text(
+            "Desculpe, ocorreu um erro ao tentar analisar suas informações. Por favor, tente novamente mais tarde ou use o comando /cancelar."
+        )
         return ConversationHandler.END
+
+    # MODIFICAÇÃO 4: Mensagem final de encerramento.
+    await update.message.reply_text("Espero ter ajudado! Se cuide. Se precisar de algo mais, pode me chamar com o comando /start.")
+    return ConversationHandler.END
     
 async def como_funciona(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Explica o funcionamento do bot quando o botão correspondente é clicado."""
