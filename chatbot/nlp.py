@@ -17,6 +17,10 @@ try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
     nltk.download('punkt')
+try: 
+    nltk.data.find('punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab')
 
 
 #Listas de palavras comuns em português para ignorar

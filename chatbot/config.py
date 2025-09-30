@@ -45,7 +45,7 @@ Exemplo de saída para sintomas de febre e tosse:
 
 # 4. Inicialização do modelo Gemini
 model = genai.GenerativeModel(
-    "gemini-1.5-flash",
+    "gemini-2.5-flash",
     system_instruction=SYSTEM_INSTRUCTION
 )
 

@@ -30,7 +30,7 @@ from . import database
 
 
 #Aqui define os estados da conversa
-CHOOSING, DESCRIBING_SYMPTOMS, ASKING_ZONE, CHOSSING_CLINIC, CHOOSING_APPOINTMENT = range(5)
+CHOOSING, DESCRIBING_SYMPTOMS, ASKING_ZONE, CHOOSING_CLINIC, CHOOSING_APPOINTMENT = range(5)
 
 
 
@@ -85,7 +85,8 @@ async def iniciar_consulta(update: Update,
 # Passo 3: Onde o usuário digita os sintomas, a função é chamada para efetuar:
 
 
-async def analyze_symptoms(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def analyze_symptoms(update: Update,
+                           context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a mensagem de texto, obtém uma resposta JSON da IA e age de acordo."""
     texto_usuario = update.message.text
     chat_id = update.message.chat_id
@@ -97,6 +98,7 @@ async def analyze_symptoms(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         logger.info(f'Sintomas identificados para {chat_id}: {sintomas_identificado}')
 
         prompt_para_ia = f"""
+
         Analise os seguintes sintomas e gere uma resposta JSON conforme as regras do sistema.
 
         Sintomas descritos pelo usuário: "{texto_usuario}"
@@ -134,32 +136,18 @@ async def analyze_symptoms(update: Update, context: ContextTypes.DEFAULT_TYPE) -
    # Passo 4: Perguntar a zona do usuário para sugerir clínicas próximas ( para os casos médios)
 
 
-async def ask_for_zone(update: Update,
-                      context: ContextTypes.DEFAULT_TYPE
-                      ) -> int:
-   """
-   Pergunta ao usuário que zona que ele reside:
-   """
-   teclado = [
-       [InlineKeyboardButton(text = "Zona Norte",
-                                  callback_data='norte'),
-       InlineKeyboardButton(text = "Zona Sul",
-                                  callback_data='Sul')],
-       [InlineKeyboardButton(text = "Zona Leste",
-                                  callback_data='Leste'),
-       InlineKeyboardButton(text = "Zona Oeste",
-                                  callback_data='Oeste')]
-   ]
-
-
-   reply_markup = InlineKeyboardMarkup(teclado)
-   await update.message.reply_text(
-        "Para facilitar, posso verificar as clínicas próximas a você. " \
-        "Por favor, selecione a zona onde você reside: ",
-       
-        reply_markup=reply_markup
-   )
-   return CHOSSING_CLINIC
+async def ask_for_zone(update: Update, 
+                       context: ContextTypes.DEFAULT_TYPE) -> int:
+    
+    """Pergunta ao usuário em qual zona ele reside."""
+    # O callback_data agora corresponde ao padrão esperado ("zona_...")
+    teclado = [
+        [InlineKeyboardButton("Norte", callback_data='zona_Norte'), InlineKeyboardButton("Sul", callback_data='zona_Sul')],
+        [InlineKeyboardButton("Leste", callback_data='zona_Leste'), InlineKeyboardButton("Oeste", callback_data='zona_Oeste')]
+    ]
+    reply_markup = InlineKeyboardMarkup(teclado)
+    await update.message.reply_text("Para facilitar, posso verificar as clínicas próximas. Em qual zona de Manaus você está?", reply_markup=reply_markup)
+    return CHOOSING_CLINIC
 
 
 
@@ -188,7 +176,7 @@ async def show_clinics(update: Update,
          await query.edit_message_text(
               text="Desculpe, não encontrei clínicas para essa zona"
            )
-         return CHOSSING_CLINIC
+         return CHOOSING_CLINIC
   
     teclado = []
     for clinica_id, nome in clinicas:
@@ -208,47 +196,28 @@ async def show_clinics(update: Update,
 
 
 #Passo 6: Mostrando os horários das clinica escolhida
-async def show_appointments(update: Update,
-                           context: ContextTypes.DEFAULT_TYPE
-                           ) -> int:
-    """
-    Aqui nessa função mostra os horários disponíveis da clinica escolhida
-  
-    """
-
-
+async def show_appointments(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Mostra os horários disponíveis para a clínica selecionada."""
     query = update.callback_query
     await query.answer()
-
-
-    id_clinica = int(query.data.split('_')[1]) #Extrai o id da clinica do callback_data
-
-
+    id_clinica = int(query.data.split('_')[1])
     agendamentos = database.get_avaliable_appointments(id_clinica)
 
-
     if not agendamentos:
-         await query.edit_message_text(
-              texto="Desculpe, não há horários disponíveis para essa clínica. " \
-               "Por favor, escolha outra clínica.",
-         )
-         return ConversationHandler.END
+        await query.edit_message_text(text="Desculpe, não há horários disponíveis. Por favor, escolha outra clínica ou digite /start.")
+        return ConversationHandler.END
+
     teclado = []
+    for agendamento_id, data_hora_str in agendamentos:
+        # Converte a string da data para objeto datetime e depois formata
+        data_hora_obj = datetime.fromisoformat(data_hora_str)
+        texto_botao = data_hora_obj.strftime("%d/%m/%Y às %H:%M")
+        teclado.append([InlineKeyboardButton(texto_botao, callback_data=f'ag_{agendamento_id}_{id_clinica}')])
 
-
-    for agendamento_id,data_hora in agendamentos:
-         #Formata a data para um formato mais amigável para usuário:
-         data_hora = datetime.strftime("%d/%m/%Y às %H:%M")
-         texto_botao = f"{data_hora}"
-         teclado.append([InlineKeyboardButton(text=texto_botao,
-                                              callback_data=f'ag_{agendamento_id}_{id_clinica}')])
     reply_markup = InlineKeyboardMarkup(teclado)
-    await query.edit_message_text(
-         text = "Aqui estão os horários disponíveis. Por favor, escolha um: ",
-         reply_markup=reply_markup
-    )
-    return CHOSSING_CLINIC
-
+    await query.edit_message_text(text="Selecione um dos horários disponíveis:", reply_markup=reply_markup)
+    # Retorna o estado correto para aguardar a escolha do horário
+    return CHOOSING_APPOINTMENT
 
 
 

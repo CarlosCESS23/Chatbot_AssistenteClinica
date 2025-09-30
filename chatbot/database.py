@@ -73,48 +73,35 @@ def config_database():
 
 def bancos_de_dados_ficticios():
    """Insere dados fictícios de clícas e vagas para Manaus no banco de dados"""
-  
-   #Criação da conexão com banco de dados de SQLite com nome de clinica.db
    conexao = sqlite3.connect('clinica.db')
    cursor = conexao.cursor()
+   cursor.execute("SELECT COUNT(*) from Clinicas")
+   if cursor.fetchone()[0] == 0:
+        clinicas = [
+           (1, 'UBS Dr. Silva', 'Rua das Flores, 123', 'Cidade Nova', 'Norte'),
+           (2, 'Clínica Popular Zona Leste', 'Av. Autaz Mirim, 456', 'Jorge Teixeira', 'Leste'),
+           (3, 'Centro de Saúde da Compensa', 'Rua da Prata, 789', 'Compensa', 'Oeste'),
+           (4, 'Posto de Saúde Petrópolis', 'Av. Beira Rio, 101', 'Petrópolis', 'Sul')
+        ]
+        comando_sql = "INSERT INTO Clinicas (id, nome, rua, bairro, zona) VALUES (?, ?, ?, ?, ?);"
+        cursor.executemany(comando_sql, clinicas)
 
-
-
-
-   #Limpando dados antigos para não duplicar:
-   cursor.execute("DELETE FROM Clinicas;")
-   cursor.execute("DELETE FROM Agendamentos;")
-
-
-   clinicas = [
-       (1, 'UBS Dr. Silva', 'Rua das Flores, 123', 'Cidade Nova', 'Norte'),
-       (2, 'Clínica Popular Zona Leste', 'Av. Autaz Mirim, 456', 'Jorge Teixeira', 'Leste'),
-       (3, 'Centro de Saúde da Compensa', 'Rua da Prata, 789', 'Compensa', 'Oeste'),
-       (4, 'Posto de Saúde Petrópolis', 'Av. Beira Rio, 101', 'Petrópolis', 'Sul')
-   ]
-  
-    # 1. Adicionamos a palavra-chave "VALUES"
-   # 2. Especificamos os nomes das colunas para mais robustez
-   comando_sql = "INSERT INTO Clinicas (id, nome, rua, bairro, zona) VALUES (?, ?, ?, ?, ?);"
-   cursor.executemany(comando_sql, clinicas)
-
-
-   agendamentos = []
-   now = datetime.now()
-   for id_clinica in range(1, len(clinicas) + 1):
-       for dia in range(2):
-           for hora in range(8, 12):
-               slot_time = datetime(now.year, now.month, now.day, hora, 0, 0) + timedelta(days=dia)
-               agendamentos.append((id_clinica, None, slot_time, 'disponivel'))
-
-
-   comando_sql_agendamentos = "INSERT INTO Agendamentos (id_clinica, id_usuario, data_hora, status) VALUES (?, ?, ?, ?);"
-   cursor.executemany(comando_sql_agendamentos, agendamentos)
-
-
-   conexao.commit()
+        agendamentos = []
+        now = datetime.now()
+        for id_clinica in range(1, len(clinicas) + 1):
+           for dia in range(2):
+               for hora in range(8, 18): # Horários das 8h às 17h
+                   if hora == 12: continue # Pula horário de almoço
+                   slot_time = datetime(now.year, now.month, now.day, hora, 0, 0) + timedelta(days=dia)
+                   if slot_time > now:
+                        agendamentos.append((id_clinica, None, slot_time.isoformat(), 'disponivel'))
+        
+        comando_sql_agendamentos = "INSERT INTO Agendamentos (id_clinica, id_usuario, data_hora, status) VALUES (?, ?, ?, ?);"
+        cursor.executemany(comando_sql_agendamentos, agendamentos)
+        
+        conexao.commit()
+        print("Dados fictícios inseridos com sucesso!")
    conexao.close()
-   print("Dados fictícios inseridos com sucesso!")
 
 
 
@@ -166,7 +153,7 @@ def get_clinics_by_zone(zona):
    """Função para retornar uma lista de clínicas de uma determinada zona."""
    conexao = sqlite3.connect('clinica.db')
    cursor = conexao.cursor()
-   cursor.execute("Select id, nome from Clinicas Where zona = ?",(zona))
+   cursor.execute("Select id, nome from Clinicas Where zona = ?",(zona,))
    clinicas = cursor.fetchall()
    conexao.close()
    return clinicas
@@ -188,7 +175,7 @@ def get_avaliable_appointments(id_clinica):
    query_time_limit = datetime.now() + timedelta(hours=48)
    cursor.execute("""
                   Select id,data_hora from Agendamentos
-                  Where id_cllinica = ? AND status = 'disponivel' AND data_hora < ?
+                  Where id_clinica = ? AND status = 'disponivel' AND data_hora < ?
                   Order by data_hora limit 10
                   """,(id_clinica,query_time_limit))
   
@@ -222,25 +209,15 @@ def book_appointment(id_agendamento,id_usuario):
        conexao.close()
 
 
-def get_user_id(ID_telegram):
-   """Essa função busca o id do usuário no banco a partir do ID do telegram"""
-
-
-   #Conexão com banco de dados
-
-
+def get_user_id(telegram_id):
+   """Busca o id do usuário no banco a partir do ID do Telegram."""
    conexao = sqlite3.connect('clinica.db')
    cursor = conexao.cursor()
+   
 
 
-   #Comandos SQL para buscar os agendamentos do usuário
-   cursor.execute("select ID from usuario where telegram_id = ?",(ID_telegram))
-
-
+   cursor.execute("SELECT id FROM Usuarios WHERE telegram_id = ?", (telegram_id,))
    resultado = cursor.fetchone()
-
-
+   
    conexao.close()
-
-
    return resultado[0] if resultado else None

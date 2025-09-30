@@ -5,7 +5,7 @@ python-telegram-bot==20.0
 
 #Gemini
 google-cloud-vision==3.7.2
-google-generativeai==0.7.1
+google-generativeai
 
 #nltk
 
@@ -15,3 +15,9 @@ nltk==3.9.1
 
 python-dotenv==1.0.1
 
+#FastAPI
+
+FastAPI
+
+uvicorn[standard]
+fastapi-cors
