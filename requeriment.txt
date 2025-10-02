@@ -21,3 +21,7 @@ FastAPI
 
 uvicorn[standard]
 fastapi-cors
+
+#Criptografia:
+passlib[bcrypt]
+python-jose[cryptography]
