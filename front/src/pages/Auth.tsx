@@ -1,185 +1,154 @@
+// Ficheiro: front/src/pages/Auth.tsx
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserPlus, LogIn, Stethoscope } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import apiCLient from "@/api/client";
+import { Stethoscope, LogIn, UserPlus } from "lucide-react";
+import apiClient from "../api/client";
+import { jwtDecode } from "jwt-decode"; // Importe a biblioteca
+
+// --- NOVO ---
+// Interface para definir a estrutura do conteúdo do nosso token
+interface DecodedToken {
+  sub: string;
+  role: 'admin' | 'funcionario';
+  name: string;
+  exp: number;
+}
+// --- FIM DO NOVO ---
 
 const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [loginData, setLoginData] = useState({ email: "", password: "" });
-  const [signupData, setSignupData] = useState({
-    name: "",
-    age: "",
-    birthDate: "",
-    email: "",
-    password: "",
-  });
+  const [isLogin, setIsLogin] = useState(true);
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Estados para o formulário de login
+  const [loginEmail, setLoginEmail] = useState("admin@clinica.com");
+  const [loginPassword, setLoginPassword] = useState("admin123");
+
+  // Estados para o formulário de cadastro
+  const [signupName, setSignupName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+
+  // --- FUNÇÃO DE LOGIN ATUALIZADA ---
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulação de login (sem backend real)
-    if (loginData.email && loginData.password) {
-      // Simular role de admin se email contiver "admin"
-      const isAdmin = loginData.email.includes("admin");
-      localStorage.setItem("userRole", isAdmin ? "admin" : "funcionario");
-      localStorage.setItem("userName", loginData.email.split("@")[0]);
-      
-      toast({
-        title: "Login realizado com sucesso!",
-        description: `Bem-vindo, ${isAdmin ? "Administrador" : "Funcionário"}!`,
+    const formData = new URLSearchParams();
+    formData.append("username", loginEmail);
+    formData.append("password", loginPassword);
+
+    try {
+      const response = await apiClient.post("/token", formData, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
-      
-      navigate(isAdmin ? "/admin" : "/funcionario");
+
+      const { access_token } = response.data;
+
+      // 1. Descodificar o token para obter os dados do utilizador
+      const decodedToken = jwtDecode<DecodedToken>(access_token);
+
+      // 2. Guardar o token e os dados no localStorage
+      localStorage.setItem("accessToken", access_token);
+      localStorage.setItem("userRole", decodedToken.role);
+      localStorage.setItem("userName", decodedToken.name);
+
+      // 3. Redirecionar com base na 'role' vinda do token
+      if (decodedToken.role === "admin") {
+        navigate("/admin");
+      } else {
+        navigate("/funcionario");
+      }
+
+    } catch (error: any) {
+      toast({
+        title: "Falha no Login",
+        description: error.response?.data?.detail || "Email ou senha incorretos.",
+        variant: "destructive",
+      });
     }
   };
+  // --- FIM DA ATUALIZAÇÃO ---
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulação de cadastro (sem backend real)
-    if (signupData.name && signupData.email && signupData.password) {
-      toast({
-        title: "Cadastro solicitado!",
-        description: "Aguarde aprovação do administrador para acessar o sistema.",
+    try {
+      await apiClient.post("/funcionarios/signup", {
+        nome: signupName,
+        email: signupEmail,
+        password: signupPassword,
       });
-      setSignupData({ name: "", age: "", birthDate: "", email: "", password: "" });
+      toast({
+        title: "Cadastro enviado!",
+        description: "Seu cadastro foi enviado e aguarda aprovação do administrador.",
+      });
+      setIsLogin(true); // Volta para a tela de login
+    } catch (error: any) {
+      toast({
+        title: "Erro no Cadastro",
+        description: error.response?.data?.detail || "Não foi possível realizar o cadastro.",
+        variant: "destructive",
+      });
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-accent/20 to-primary/10 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="p-3 bg-primary rounded-full">
-            <Stethoscope className="h-8 w-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-3xl font-bold text-primary">TeleClinic</h1>
-        </div>
-
-        <Card className="shadow-xl border-2">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">Sistema de Gestão</CardTitle>
-            <CardDescription className="text-center">
-              Acesso exclusivo para funcionários da clínica
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-accent/20 to-primary/10 p-4">
+      <Card className="w-full max-w-md shadow-2xl">
+        <CardHeader className="text-center">
+            <div className="mx-auto bg-primary p-3 rounded-lg inline-block mb-4">
+                <Stethoscope className="h-8 w-8 text-primary-foreground" />
+            </div>
+            <CardTitle className="text-2xl font-bold">{isLogin ? "Bem-vindo de volta!" : "Crie sua conta"}</CardTitle>
+            <CardDescription>
+            {isLogin ? "Acesse o painel com suas credenciais" : "Preencha os dados para se cadastrar"}
             </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login" className="gap-2">
-                  <LogIn className="h-4 w-4" />
-                  Login
-                </TabsTrigger>
-                <TabsTrigger value="signup" className="gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Cadastro
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="login">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email">Email</Label>
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="seu.email@clinica.com"
-                      value={loginData.email}
-                      onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password">Senha</Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={loginData.password}
-                      onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full">
-                    <LogIn className="mr-2 h-4 w-4" />
-                    Entrar
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="signup">
-                <form onSubmit={handleSignup} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Nome Completo</Label>
-                    <Input
-                      id="signup-name"
-                      type="text"
-                      placeholder="Seu nome completo"
-                      value={signupData.name}
-                      onChange={(e) => setSignupData({ ...signupData, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-age">Idade</Label>
-                      <Input
-                        id="signup-age"
-                        type="number"
-                        placeholder="Ex: 30"
-                        value={signupData.age}
-                        onChange={(e) => setSignupData({ ...signupData, age: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-birthdate">Data de Nascimento</Label>
-                      <Input
-                        id="signup-birthdate"
-                        type="date"
-                        value={signupData.birthDate}
-                        onChange={(e) => setSignupData({ ...signupData, birthDate: e.target.value })}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="seu.email@email.com"
-                      value={signupData.email}
-                      onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Senha</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={signupData.password}
-                      onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" variant="secondary">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Solicitar Cadastro
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
+        </CardHeader>
+        <CardContent>
+          {isLogin ? (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="login-email">Email</Label>
+                <Input id="login-email" type="email" placeholder="admin@clinica.com" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="login-password">Senha</Label>
+                <Input id="login-password" type="password" placeholder="********" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
+              </div>
+              <Button type="submit" className="w-full">
+                <LogIn className="mr-2 h-4 w-4" /> Entrar
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleSignup} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="signup-name">Nome Completo</Label>
+                <Input id="signup-name" placeholder="Seu nome" value={signupName} onChange={(e) => setSignupName(e.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-email">Email</Label>
+                <Input id="signup-email" type="email" placeholder="seu@email.com" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-password">Senha</Label>
+                <Input id="signup-password" type="password" placeholder="********" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} required />
+              </div>
+              <Button type="submit" className="w-full">
+                <UserPlus className="mr-2 h-4 w-4" /> Cadastrar
+              </Button>
+            </form>
+          )}
+        </CardContent>
+        <CardFooter>
+            <Button variant="link" className="w-full" onClick={() => setIsLogin(!isLogin)}>
+            {isLogin ? "Não tem uma conta? Cadastre-se" : "Já tem uma conta? Faça login"}
+            </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 };

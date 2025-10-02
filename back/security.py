@@ -7,7 +7,7 @@ from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from database import get_funcionario_by_email
 
-load_dotenv("../.env")
+load_dotenv("/.env")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')

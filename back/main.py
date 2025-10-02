@@ -40,7 +40,17 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email ou senha incorretos")
     if user["status"] != "active":
         raise HTTPException(status_code=400, detail="Utilizador inativo ou pendente de aprovação")
-    access_token = create_access_token(data={"sub": user["email"]})
+
+    # --- ALTERAÇÃO AQUI ---
+    # Adicionamos 'role' e 'nome' ao payload do token.
+    access_token_data = {
+        "sub": user["email"],
+        "role": user["role"],
+        "name": user["nome"]
+    }
+    access_token = create_access_token(data=access_token_data)
+    # --- FIM DA ALTERAÇÃO ---
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/funcionarios/signup", response_model=Funcionario)
@@ -76,10 +86,23 @@ async def get_all_funcionarios(current_admin: dict = Depends(get_current_active_
 async def approve_funcionario(funcionario_id: int, current_admin: dict = Depends(get_current_active_admin)):
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # 1. Atualizar o status do funcionário
     cursor.execute("UPDATE Funcionarios SET status = 'active' WHERE id = ?", (funcionario_id,))
     conn.commit()
+
+    # 2. Verificar se a atualização foi bem-sucedida
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Funcionário não encontrado")
+
+    # 3. Buscar os dados completos do funcionário recém-aprovado
+    cursor.execute("SELECT id, nome, email, role, status FROM Funcionarios WHERE id = ?", (funcionario_id,))
+    funcionario_aprovado = cursor.fetchone()
     conn.close()
-    return {"status": "success"}
+
+    # 4. Devolver o objeto completo, que corresponde ao response_model
+    return dict(funcionario_aprovado)
 
 @app.delete("/admin/remover/{funcionario_id}")
 async def remove_funcionario(funcionario_id: int, current_admin: dict = Depends(get_current_active_admin)):

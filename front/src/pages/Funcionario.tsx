@@ -1,59 +1,87 @@
-import { useState } from "react";
+// front/src/pages/Funcionario.tsx
+
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { LogOut, Calendar, Clock, MessageSquare, Stethoscope, AlertCircle, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import apiClient from "../api/client"; // Importar nosso cliente de API
 
-// Dados simulados de reservas
-const bookingsData = [
-  { id: 1, patient: "Carlos Oliveira", time: "14:00", date: "2025-10-05", type: "Consulta Geral", status: "confirmado", telegram: "@carlos_o" },
-  { id: 2, patient: "Fernanda Rocha", time: "15:30", date: "2025-10-05", type: "Exame de Sangue", status: "confirmado", telegram: "@fer_rocha" },
-  { id: 3, patient: "Roberto Alves", time: "16:00", date: "2025-10-06", type: "Retorno", status: "pendente", telegram: "@roberto_alves" },
-  { id: 4, patient: "Juliana Martins", time: "09:00", date: "2025-10-06", type: "Consulta Especialista", status: "confirmado", telegram: "@ju_martins" },
-  { id: 5, patient: "Marcos Paulo", time: "10:30", date: "2025-10-07", type: "Exame de Imagem", status: "confirmado", telegram: "@marcospaulo" },
-];
+// Tipos para os dados da API
+interface Consulta {
+  id_agendamento: number;
+  data_hora: string;
+  nome_paciente: string;
+  telegram_id: number;
+  nome_clinica: string;
+  zona_clinica: string;
+}
 
 const Funcionario = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const userName = localStorage.getItem("userName") || "Funcionário";
-  const [bookings] = useState(bookingsData);
+  
+  const [consultas, setConsultas] = useState<Consulta[]>([]);
   const [message, setMessage] = useState("");
-  const [selectedBooking, setSelectedBooking] = useState<typeof bookingsData[0] | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<Consulta | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const handleSendMessage = () => {
-    if (message.trim() && selectedBooking) {
+  const fetchConsultas = async () => {
+    try {
+      const response = await apiClient.get<Consulta[]>("/consultas");
+      setConsultas(response.data);
+    } catch (error) {
       toast({
-        title: "Mensagem enviada!",
-        description: `Notificação enviada para ${selectedBooking.patient} no Telegram (${selectedBooking.telegram})`,
+        title: "Erro ao carregar consultas",
+        description: "Não foi possível buscar os agendamentos.",
+        variant: "destructive",
       });
-      setMessage("");
-      setSelectedBooking(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchConsultas();
+  }, []);
+
+  const handleSendMessage = async () => {
+    if (message.trim() && selectedBooking) {
+      try {
+        await apiClient.post("/notificar", {
+          telegram_id: selectedBooking.telegram_id,
+          mensagem: message,
+        });
+        toast({
+          title: "Mensagem enviada!",
+          description: `Notificação enviada para ${selectedBooking.nome_paciente} no Telegram.`,
+        });
+        setMessage("");
+        setSelectedBooking(null);
+        setIsDialogOpen(false); // Fechar o diálogo
+      } catch (error: any) {
+        toast({
+          title: "Erro ao enviar notificação",
+          description: error.response?.data?.detail || "Não foi possível enviar a mensagem.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("userRole");
+    localStorage.removeItem("accessToken");
     localStorage.removeItem("userName");
     navigate("/auth");
-  };
-
-  const getStatusBadge = (status: string) => {
-    if (status === "confirmado") {
-      return <Badge className="bg-secondary text-secondary-foreground">Confirmado</Badge>;
-    }
-    return <Badge variant="outline">Pendente</Badge>;
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-accent/20 to-primary/10">
       {/* Header */}
-      <header className="bg-card border-b shadow-sm sticky top-0 z-10">
+       <header className="bg-card border-b shadow-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-secondary rounded-lg">
@@ -65,15 +93,7 @@ const Funcionario = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => navigate("/perfil")}>
-              <Avatar className="h-8 w-8 mr-2">
-                <AvatarImage src="" />
-                <AvatarFallback className="bg-secondary text-secondary-foreground">
-                  {userName.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="hidden sm:inline">{userName}</span>
-            </Button>
+            <span className="hidden sm:inline">{userName}</span>
             <Button variant="outline" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Sair
@@ -88,31 +108,30 @@ const Funcionario = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Reservas de Pacientes
+              Reservas de Pacientes (via Telegram)
             </CardTitle>
             <CardDescription>
-              Consulte as reservas feitas via Telegram e notifique os pacientes quando necessário
+              Consulte as reservas e notifique os pacientes.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {bookings.map((booking) => (
+              {consultas.map((booking) => (
                 <div
-                  key={booking.id}
+                  key={booking.id_agendamento}
                   className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 border-2 rounded-lg hover:border-primary/50 transition-all hover:shadow-md bg-card"
                 >
                   <div className="flex-1 space-y-2">
-                    <div className="flex items-start gap-3">
-                      <Avatar className="h-10 w-10">
+                     <div className="flex items-start gap-3">
+                        <Avatar className="h-10 w-10">
                         <AvatarImage src="" />
                         <AvatarFallback className="bg-primary text-primary-foreground">
-                          {booking.patient.charAt(0)}
+                          {booking.nome_paciente.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <h3 className="font-semibold text-foreground text-lg">{booking.patient}</h3>
-                        <p className="text-sm text-muted-foreground">{booking.type}</p>
-                        <p className="text-xs text-muted-foreground mt-1">Telegram: {booking.telegram}</p>
+                        <h3 className="font-semibold text-foreground text-lg">{booking.nome_paciente}</h3>
+                        <p className="text-sm text-muted-foreground">{booking.nome_clinica} ({booking.zona_clinica})</p>
                       </div>
                     </div>
                   </div>
@@ -121,24 +140,29 @@ const Funcionario = () => {
                     <div className="text-right">
                       <div className="flex items-center gap-2 text-sm font-medium mb-1">
                         <Clock className="h-4 w-4 text-primary" />
-                        {booking.time}
+                        {new Date(booking.data_hora).toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {new Date(booking.date).toLocaleDateString("pt-BR", { 
+                        {new Date(booking.data_hora).toLocaleDateString("pt-BR", { 
                           day: "2-digit", 
                           month: "long",
                           year: "numeric" 
                         })}
                       </div>
-                      <div className="mt-2">{getStatusBadge(booking.status)}</div>
                     </div>
                     
-                    <Dialog>
+                    <Dialog open={isDialogOpen && selectedBooking?.id_agendamento === booking.id_agendamento} onOpenChange={(open) => {
+                        if (!open) setSelectedBooking(null);
+                        setIsDialogOpen(open);
+                    }}>
                       <DialogTrigger asChild>
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => setSelectedBooking(booking)}
+                          onClick={() => {
+                              setSelectedBooking(booking);
+                              setIsDialogOpen(true);
+                          }}
                         >
                           <MessageSquare className="mr-2 h-4 w-4" />
                           Notificar
@@ -151,21 +175,20 @@ const Funcionario = () => {
                             Enviar Notificação ao Paciente
                           </DialogTitle>
                           <DialogDescription>
-                            Envie uma mensagem via Telegram para {booking.patient}
+                            Envie uma mensagem via Telegram para {selectedBooking?.nome_paciente}
                           </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 pt-4">
-                          <div className="p-3 bg-accent/50 rounded-lg">
-                            <p className="text-sm font-medium">Paciente: {booking.patient}</p>
-                            <p className="text-sm text-muted-foreground">Telegram: {booking.telegram}</p>
+                           <div className="p-3 bg-accent/50 rounded-lg">
+                            <p className="text-sm font-medium">Paciente: {selectedBooking?.nome_paciente}</p>
                             <p className="text-sm text-muted-foreground">
-                              Agendamento: {new Date(booking.date).toLocaleDateString("pt-BR")} às {booking.time}
+                              Agendamento: {selectedBooking ? new Date(selectedBooking.data_hora).toLocaleDateString("pt-BR") : ''} às {selectedBooking ? new Date(selectedBooking.data_hora).toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' }) : ''}
                             </p>
                           </div>
                           <div className="space-y-2">
                             <label className="text-sm font-medium">Mensagem</label>
                             <Textarea
-                              placeholder="Digite sua mensagem aqui... Ex: Confirmação de consulta, reagendamento, informações importantes, etc."
+                              placeholder="Digite sua mensagem aqui..."
                               value={message}
                               onChange={(e) => setMessage(e.target.value)}
                               rows={4}
