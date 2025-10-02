@@ -7,8 +7,8 @@ const apiClient = axios.create({
   baseURL: API_BASE_URL,
 });
 
-// Isso é um "interceptor". Ele executa antes de cada requisição.
-// Ele pega o token que salvamos no login e o anexa no cabeçalho.
+// Este "interceptor" é executado antes de cada requisição.
+// Ele pega o token que guardámos no login e anexa-o ao cabeçalho.
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken');

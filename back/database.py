@@ -1,14 +1,10 @@
-# Funções de bancos de dados:
-
 import sqlite3
+from passlib.context import CryptContext
 
+DATABASE_URL = "../clinica.db" 
 
-def config_database(DATABASE_URL : str):
-
-    print("BANCO DE DADOS INICIALIZADO!!!!!!!!!!!!!!!!!!!")
-    
-    #Criação de table de funcionário e Admin
-
+def config_database():
+    print("INICIALIZANDO E CONFIGURANDO O BANCO DE DADOS...")
     conexao = sqlite3.connect(DATABASE_URL)
     cursor = conexao.cursor()
 
@@ -23,39 +19,33 @@ def config_database(DATABASE_URL : str):
         ); 
     """)
     
-    #Adicionando o adminsitrador padrão:
-
-    cursor.execute(
-        "Select id FROM Funcionarios WHERE role = 'admin'"
-                   )
+    # Esta verificação impede a criação duplicada do administrador
+    cursor.execute("SELECT id FROM Funcionarios WHERE role = 'admin' AND email = 'admin@clinica.com'")
     if cursor.fetchone() is None:
-        from passlib.context import CryptContext
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        admin_passow_hash = pwd_context.hash("admin123")
-
+        admin_password_hash = pwd_context.hash("admin123")
         cursor.execute(
-            "INSERT INTO Funcionarios (nome,email,hashed_password,role,status)VALUES (?,?,?,?,?)",
-            ("Admin Padrão", "admin@clinica.com",admin_passow_hash,"admin","active")
+            "INSERT INTO Funcionarios (nome, email, hashed_password, role, status) VALUES (?, ?, ?, ?, ?)",
+            ("Admin Padrão", "admin@clinica.com", admin_password_hash, "admin", "active")
         )
         print("Administrador padrão criado com sucesso!")
-        print("Emai: admin@clinica.com")
-        print("Senha: admin123")
+        print("Email: admin@clinica.com | Senha: admin123")
+    
+    conexao.commit()
+    conexao.close()
+    print("BANCO DE DADOS CONFIGURADO COM SUCESSO!")
 
-
-#Funções do banco de dados
-def get_db_connection(DATABASE_URL : str):
-    """Aqui cria e retorna uma conexão com banco de dados"""
+def get_db_connection():
     conexao = sqlite3.connect(DATABASE_URL)
-    conexao.row_factory = sqlite3.Row # Isso permite acessar colunas por nome
+    conexao.row_factory = sqlite3.Row
     return conexao
 
-def get_funcionario_by_email(email : str, DATABASE_URL : str):
-    conexao = sqlite3.connect(DATABASE_URL)
+def get_funcionario_by_email(email: str):
+    conexao = get_db_connection()
     cursor = conexao.cursor()
-    cursor.execute("SELECT * FROM Funcionarios WHERE email = ?",(email,))
+    cursor.execute("SELECT * FROM Funcionarios WHERE email = ?", (email,))
     funcionario = cursor.fetchone()
     conexao.close()
     if funcionario: 
         return dict(funcionario)
     return None
-
