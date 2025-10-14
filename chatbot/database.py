@@ -1,239 +1,171 @@
+# chatbot/database.py
+
 import sqlite3
 from datetime import datetime, timedelta
-from venv import logger
+from .config import logger
 
+DATABASE_URL = "../data/clinica.db"
 
-
+def get_db_connection():
+    """Retorna uma conexão com o banco de dados."""
+    conexao = sqlite3.connect(DATABASE_URL)
+    conexao.row_factory = sqlite3.Row
+    return conexao
 
 def config_database():
-   """"Aqui é a configuração do banco de dados,
-   onde ele cria caso o banco e as tabelas não existirem"""
-
-
-  
-   #Criação da conexão com banco de dados de SQLite com nome de clinica.db
-   conexao = sqlite3.connect('clinica.db')
-
-
-   # Criação do cursor para executar comandos SQL
-   cursor = conexao.cursor()
-
-
-
-
-   # Criação de tabelas:
-
-
-   #Tabela de Usuários:
-
-
-   cursor.execute("""
-   CREATE TABLE IF NOT EXISTS Usuarios (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       telegram_id INTEGER UNIQUE NOT NULL,
-       nome TEXT,
-       historico_sintomas TEXT,
-       ultima_interacao DATETIME NOT NULL
-   );
-   """)
-  
-
-
-   #Tabela de Clinica:
-   cursor.execute("""
-   CREATE TABLE IF NOT EXISTS Clinicas (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       nome TEXT NOT NULL,
-       rua TEXT,
-       bairro TEXT NOT NULL,
-       zona TEXT NOT NULL
-   );
-   """)
-  
-   #Criação de tabela de agendamento:
-
-
-   cursor.execute("""
-   CREATE TABLE IF NOT EXISTS Agendamentos (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       id_clinica INTEGER NOT NULL,
-       id_usuario INTEGER,
-       data_hora DATETIME NOT NULL,
-       status TEXT NOT NULL CHECK(status IN ('disponivel', 'reservado')),
-       FOREIGN KEY (id_clinica) REFERENCES Clinicas (id),
-       FOREIGN KEY (id_usuario) REFERENCES Usuarios (id)
-   );
-   """)
-  
-   # Salvando as alterações e fechando a conexão
-
-
-   conexao.commit()
-   conexao.close()
-
-
-def bancos_de_dados_ficticios():
-   """Insere dados fictícios de clícas e vagas para Manaus no banco de dados"""
-   conexao = sqlite3.connect('clinica.db')
-   cursor = conexao.cursor()
-   cursor.execute("SELECT COUNT(*) from Clinicas")
-   if cursor.fetchone()[0] == 0:
-        clinicas = [
-           (1, 'UBS Dr. Silva', 'Rua das Flores, 123', 'Cidade Nova', 'Norte'),
-           (2, 'Clínica Popular Zona Leste', 'Av. Autaz Mirim, 456', 'Jorge Teixeira', 'Leste'),
-           (3, 'Centro de Saúde da Compensa', 'Rua da Prata, 789', 'Compensa', 'Oeste'),
-           (4, 'Posto de Saúde Petrópolis', 'Av. Beira Rio, 101', 'Petrópolis', 'Sul')
-        ]
-        comando_sql = "INSERT INTO Clinicas (id, nome, rua, bairro, zona) VALUES (?, ?, ?, ?, ?);"
-        cursor.executemany(comando_sql, clinicas)
-
-        agendamentos = []
-        now = datetime.now()
-        for id_clinica in range(1, len(clinicas) + 1):
-           for dia in range(2):
-               for hora in range(8, 18): # Horários das 8h às 17h
-                   if hora == 12: continue # Pula horário de almoço
-                   slot_time = datetime(now.year, now.month, now.day, hora, 0, 0) + timedelta(days=dia)
-                   if slot_time > now:
-                        agendamentos.append((id_clinica, None, slot_time.isoformat(), 'disponivel'))
-        
-        comando_sql_agendamentos = "INSERT INTO Agendamentos (id_clinica, id_usuario, data_hora, status) VALUES (?, ?, ?, ?);"
-        cursor.executemany(comando_sql_agendamentos, agendamentos)
-        
-        conexao.commit()
-        print("Dados fictícios inseridos com sucesso!")
-   conexao.close()
-
-
-
-
-def get_or_create_user(telegram_id: int, nome: str):
-    """
-    Verifica se um usuário existe pelo telegram_id.
-    - Se existir, atualiza o nome (caso tenha mudado) e a data da última interação.
-    - Se não existir, cria um novo registro para esse usuário.
-    """
-    conexao = sqlite3.connect('clinica.db')
+    """Cria todas as tabelas necessárias no banco de dados se elas não existirem."""
+    print("INICIALIZANDO E CONFIGURANDO O BANCO DE DADOS (CHATBOT)...")
+    conexao = get_db_connection()
     cursor = conexao.cursor()
     
-    # Momento atual, para evitar chamadas repetidas
-    now = datetime.now()
+    # Tabela de Usuários
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id INTEGER UNIQUE NOT NULL,
+            nome TEXT NOT NULL,
+            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
 
-    # 1. Tenta buscar o usuário pelo seu ID único do Telegram
-    # A sintaxe correta do SELECT é: SELECT colunas FROM tabela WHERE condição
-    cursor.execute("SELECT id FROM Usuarios WHERE telegram_id = ?", (telegram_id,))
-    user_data = cursor.fetchone() # Pega o primeiro resultado (que deve ser o único)
+    # Tabela de Clínicas
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Clinicas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            zona TEXT NOT NULL
+        );
+    """)
 
-    if user_data:
-        # 2. Se o usuário FOI encontrado, atualiza seus dados
-        user_id = user_data[0] # Pega o ID interno do banco
-        
-        # O comando UPDATE é o correto para modificar um registro existente
-        cursor.execute(
-            "UPDATE Usuarios SET nome = ?, ultima_interacao = ? WHERE id = ?",
-            (nome, now, user_id)
-        )
-        print(f"Usuário {telegram_id} ({nome}) atualizado no banco de dados.")
-    else:
-        # 3. Se o usuário NÃO FOI encontrado, cria um novo
-        # O comando INSERT é o correto para adicionar um novo registro
-        cursor.execute(
-            "INSERT INTO Usuarios (telegram_id, nome, ultima_interacao) VALUES (?, ?, ?)",
-            (telegram_id, nome, now)
-        )
-        print(f"Novo usuário {telegram_id} ({nome}) criado no banco de dados.")
-        
-    # Salva (commit) as alterações no banco de dados
-    conexao.commit()
+    # Tabela de Agendamentos
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Agendamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_clinica INTEGER,
+            id_usuario INTEGER,
+            data_hora TIMESTAMP NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('disponivel', 'reservado')) DEFAULT 'disponivel',
+            FOREIGN KEY (id_clinica) REFERENCES Clinicas (id),
+            FOREIGN KEY (id_usuario) REFERENCES Usuarios (id)
+        );
+    """)
     
-    # Fecha a conexão para liberar os recursos
+    conexao.commit()
+    conexao.close()
+    print("BANCO DE DADOS CONFIGURADO COM SUCESSO (CHATBOT)!")
+
+
+def get_or_create_user(telegram_id: int, nome: str) -> None:
+    """Busca um usuário pelo ID do Telegram ou o cria se não existir."""
+    conexao = get_db_connection()
+    cursor = conexao.cursor()
+    cursor.execute("SELECT id FROM Usuarios WHERE telegram_id = ?", (telegram_id,))
+    user = cursor.fetchone()
+    if not user:
+        cursor.execute("INSERT INTO Usuarios (telegram_id, nome) VALUES (?, ?)", (telegram_id, nome))
+        conexao.commit()
+        logger.info(f"Novo usuário criado: {nome} (ID Telegram: {telegram_id})")
     conexao.close()
 
+def bancos_de_dados_ficticios():
+    """Popula o banco de dados com clínicas e horários fictícios se estiver vazio."""
+    conexao = get_db_connection()
+    cursor = conexao.cursor()
 
-def get_clinics_by_zone(zona):
-   """Função para retornar uma lista de clínicas de uma determinada zona."""
-   conexao = sqlite3.connect('clinica.db')
-   cursor = conexao.cursor()
-   cursor.execute("Select id, nome from Clinicas Where zona = ?",(zona,))
-   clinicas = cursor.fetchall()
-   conexao.close()
-   return clinicas
+    # Verifica se já existem clínicas para não duplicar os dados
+    cursor.execute("SELECT COUNT(*) FROM Clinicas")
+    if cursor.fetchone()[0] > 0:
+        conexao.close()
+        logger.info("Banco de dados já populado com dados fictícios.")
+        return
 
+    logger.info("Populando o banco de dados com clínicas e agendamentos fictícios...")
+    
+    # Insere Clínicas Fictícias
+    clinicas = [
+        ('Clínica Coração de Jesus', 'Norte'), ('Clínica Bem-Estar', 'Norte'),
+        ('Clínica Saúde Plena', 'Sul'), ('Clínica Vida Longa', 'Sul'),
+        ('Clínica Sorriso', 'Leste'), ('Clínica Visão Clara', 'Leste'),
+        ('Clínica OrtoPé', 'Oeste'), ('Clínica DermatoPele', 'Oeste')
+    ]
+    cursor.executemany("INSERT INTO Clinicas (nome, zona) VALUES (?, ?)", clinicas)
+    conexao.commit()
 
+    # Insere Agendamentos Disponíveis Fictícios
+    cursor.execute("SELECT id FROM Clinicas")
+    clinica_ids = [row[0] for row in cursor.fetchall()]
+    agendamentos = []
+    
+    # Cria horários para os próximos 5 dias
+    for clinica_id in clinica_ids:
+        for dia in range(1, 6):
+            for hora in range(9, 18, 2): # Horários a cada 2 horas
+                data_hora = datetime.now().replace(hour=hora, minute=0, second=0, microsecond=0) + timedelta(days=dia)
+                agendamentos.append((clinica_id, data_hora.isoformat()))
 
-
-def get_avaliable_appointments(id_clinica):
-   """Função para retornar uma lista de horário disponiveis"""
-
-
-   conexao = sqlite3.connect('clinica.db')
-
-
-   cursor = conexao.cursor()
-
-
-   #Buscando horário para as pŕoximas 48 horas que estão disponíveis
-   query_time_limit = datetime.now() + timedelta(hours=48)
-   cursor.execute("""
-                  Select id,data_hora from Agendamentos
-                  Where id_clinica = ? AND status = 'disponivel' AND data_hora < ?
-                  Order by data_hora limit 10
-                  """,(id_clinica,query_time_limit))
-  
-   agendamentos = cursor.fetchall()
-   conexao.close()
-   return agendamentos
-  
-def book_appointment(id_agendamento,id_usuario):
-   """Uma função para reservar um horário de atendimento para o usuário"""
-
-
-   #Conexão com banco de dados
-   conexao = sqlite3.connect('clinica.db')
-   cursor = conexao.cursor()
+    cursor.executemany("INSERT INTO Agendamentos (id_clinica, data_hora) VALUES (?, ?)", agendamentos)
+    conexao.commit()
+    conexao.close()
+    logger.info("Dados fictícios inseridos com sucesso!")
 
 
-   try:
-       cursor.execute("""
-                      Update Agendamentos set id_usuario = ?,status = 'reservado'
-                      Where id = ? AND status = 'disponivel'""",(id_usuario,id_agendamento)
-                      )
-       conexao.commit()
+def get_user_id(telegram_id: int) -> int | None:
+    """Busca o ID do usuário no banco de dados a partir do ID do Telegram."""
+    conexao = get_db_connection()
+    cursor = conexao.cursor()
+    cursor.execute("SELECT id FROM Usuarios WHERE telegram_id = ?", (telegram_id,))
+    resultado = cursor.fetchone()
+    conexao.close()
+    return resultado[0] if resultado else None
 
+def get_clinics_by_zone(zona: str) -> list[tuple]:
+    """Retorna uma lista de clínicas de uma determinada zona."""
+    conexao = get_db_connection()
+    cursor = conexao.cursor()
+    cursor.execute("SELECT id, nome FROM Clinicas WHERE zona = ?", (zona,))
+    clinicas = cursor.fetchall()
+    conexao.close()
+    return [(row['id'], row['nome']) for row in clinicas]
 
-       #Verifica se alguma linha foi alterado, isso confirma se o agendamento foi atualizado
-       return cursor.rowcount > 0
-   except sqlite3.Error as e:
-       print(f"Erro ao reservar o agendamento: {e}")
-       return False
-   finally:
-       conexao.close()
+def get_avaliable_appointments(id_clinica: int) -> list[tuple]:
+    """Retorna horários disponíveis para uma clínica."""
+    conexao = get_db_connection()
+    cursor = conexao.cursor()
+    query = """
+        SELECT id, data_hora FROM Agendamentos
+        WHERE id_clinica = ? AND status = 'disponivel' AND data_hora > ?
+        ORDER BY data_hora LIMIT 5;
+    """
+    cursor.execute(query, (id_clinica, datetime.now().isoformat()))
+    agendamentos = cursor.fetchall()
+    conexao.close()
+    return [(row['id'], row['data_hora']) for row in agendamentos]
 
-
-def get_user_id(telegram_id):
-   """Busca o id do usuário no banco a partir do ID do Telegram."""
-   conexao = sqlite3.connect('clinica.db')
-   cursor = conexao.cursor()
-   
-
-
-   cursor.execute("SELECT id FROM Usuarios WHERE telegram_id = ?", (telegram_id,))
-   resultado = cursor.fetchone()
-   
-   conexao.close()
-   return resultado[0] if resultado else None
-
+def book_appointment(id_agendamento: int, id_usuario: int) -> bool:
+    """Reserva um horário, atualizando o status e associando ao usuário."""
+    conexao = get_db_connection()
+    cursor = conexao.cursor()
+    try:
+        cursor.execute(
+            "UPDATE Agendamentos SET status = 'reservado', id_usuario = ? WHERE id = ? AND status = 'disponivel'",
+            (id_usuario, id_agendamento)
+        )
+        conexao.commit()
+        # Verifica se alguma linha foi de fato alterada
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        logger.error(f"Erro ao agendar horário: {e}")
+        return False
+    finally:
+        conexao.close()
 
 def salvar_sintomas(id_usuario: int, sintomas: list[str]):
     """Salva a lista de sintomas para um usuário no banco de dados."""
     if not sintomas:
         return
-
-    conexao = sqlite3.connect('clinica.db')
+    conexao = get_db_connection()
     cursor = conexao.cursor()
-    
     dados_para_inserir = [(id_usuario, sintoma) for sintoma in sintomas]
-    
     try:
         cursor.executemany("INSERT INTO Sintomas (id_usuario, sintoma) VALUES (?, ?)", dados_para_inserir)
         conexao.commit()

@@ -1,0 +1,24 @@
+# .dockerignore
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv/
+
+# Node
+node_modules
+front/node_modules
+bun.lockb
+front/bun.lockb
+
+# IDE / OS specific
+.vscode
+.idea
+.DS_Store

@@ -1,0 +1,4 @@
+# front/.dockerignore
+
+node_modules
+src/integrations

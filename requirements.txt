@@ -1,0 +1,20 @@
+# requirements.txt
+
+# Para o Backend com FastAPI
+fastapi
+uvicorn[standard]
+python-dotenv
+bcrypt==4.3.0
+passlib
+pydantic
+python-jose[cryptography]
+python-multipart
+
+# Para o Chatbot com Telegram
+python-telegram-bot
+
+# Para o Processamento de Linguagem Natural (NLP)
+nltk
+
+# Para a integração com a IA do Google
+google-generativeai

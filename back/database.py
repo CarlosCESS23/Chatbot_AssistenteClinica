@@ -1,13 +1,16 @@
+# back/database.py
+
 import sqlite3
 from passlib.context import CryptContext
 
-DATABASE_URL = "../clinica.db" 
+DATABASE_URL = "/data/clinica.db" 
 
 def config_database():
-    print("INICIALIZANDO E CONFIGURANDO O BANCO DE DADOS...")
+    print("INICIALIZANDO E CONFIGURANDO O BANCO DE DADOS (BACKEND)...")
     conexao = sqlite3.connect(DATABASE_URL)
     cursor = conexao.cursor()
 
+    # --- TABELA FUNCIONARIOS (sem alterações) ---
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS Funcionarios(
                    id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,7 +21,38 @@ def config_database():
                    status TEXT NOT NULL CHECK (status IN ('pending', 'active')) DEFAULT 'pending'
         ); 
     """)
-    #Adição para gerar o gráfico
+    
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Garante que a tabela Clinicas seja criada exatamente como o chatbot espera,
+    # sem a coluna 'bairro'.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Clinicas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            zona TEXT NOT NULL
+        );
+    """)
+
+    # --- As outras tabelas que o chatbot também cria ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id INTEGER UNIQUE NOT NULL,
+            nome TEXT NOT NULL,
+            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Agendamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_clinica INTEGER,
+            id_usuario INTEGER,
+            data_hora TIMESTAMP NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('disponivel', 'reservado')) DEFAULT 'disponivel',
+            FOREIGN KEY (id_clinica) REFERENCES Clinicas (id),
+            FOREIGN KEY (id_usuario) REFERENCES Usuarios (id)
+        );
+    """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS Sintomas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,8 +62,9 @@ def config_database():
             FOREIGN KEY (id_usuario) REFERENCES Usuarios (id)
         );
     """)
+    # --- FIM DA CORREÇÃO ---
     
-    # Esta verificação impede a criação duplicada do administrador
+    # Cria o administrador padrão (sem alterações)
     cursor.execute("SELECT id FROM Funcionarios WHERE role = 'admin' AND email = 'admin@clinica.com'")
     if cursor.fetchone() is None:
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -43,7 +78,7 @@ def config_database():
     
     conexao.commit()
     conexao.close()
-    print("BANCO DE DADOS CONFIGURADO COM SUCESSO!")
+    print("BANCO DE DADOS CONFIGURADO COM SUCESSO (BACKEND)!")
 
 def get_db_connection():
     conexao = sqlite3.connect(DATABASE_URL)
