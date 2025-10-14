@@ -18,6 +18,16 @@ def config_database():
                    status TEXT NOT NULL CHECK (status IN ('pending', 'active')) DEFAULT 'pending'
         ); 
     """)
+    #Adição para gerar o gráfico
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Sintomas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_usuario INTEGER,
+            sintoma TEXT NOT NULL,
+            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_usuario) REFERENCES Usuarios (id)
+        );
+    """)
     
     # Esta verificação impede a criação duplicada do administrador
     cursor.execute("SELECT id FROM Funcionarios WHERE role = 'admin' AND email = 'admin@clinica.com'")

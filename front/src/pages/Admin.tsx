@@ -6,11 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
-import { LogOut, UserPlus, UserMinus, User, Calendar, Stethoscope } from "lucide-react";
-import apiClient from "../api/client"; // Importar nosso cliente de API
+import { LogOut, UserPlus, UserMinus, User, Stethoscope } from "lucide-react";
+import apiClient from "../api/client";
 import { useToast } from "@/hooks/use-toast";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-// Definindo o tipo para um funcionário
+// Tipos de dados
 interface Funcionario {
   id: number;
   nome: string;
@@ -19,14 +20,20 @@ interface Funcionario {
   status: 'pending' | 'active';
 }
 
+interface SintomaData {
+  name: string;
+  total: number;
+}
+
 const Admin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const userName = localStorage.getItem("userName") || "Administrador";
-  
+
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
-  
-  // Função para carregar os dados da API
+  const [sintomas, setSintomas] = useState<SintomaData[]>([]);
+
+  // Carrega dados dos funcionários
   const fetchFuncionarios = async () => {
     try {
       const response = await apiClient.get<Funcionario[]>("/admin/funcionarios");
@@ -40,42 +47,42 @@ const Admin = () => {
     }
   };
 
-  // Carregar os dados quando o componente montar
+  // Carrega dados dos sintomas para o gráfico
+  const fetchSintomas = async () => {
+    try {
+      const response = await apiClient.get<SintomaData[]>("/sintomas/stats");
+      setSintomas(response.data);
+    } catch (error) {
+      toast({
+        title: "Erro ao carregar estatísticas de sintomas",
+        description: "Não foi possível buscar os dados para o gráfico.",
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
     fetchFuncionarios();
+    fetchSintomas();
   }, []);
 
   const handleApprove = async (userId: number) => {
     try {
       await apiClient.post(`/admin/aprovar/${userId}`);
-      toast({
-        title: "Sucesso!",
-        description: "Funcionário aprovado e movido para a equipe ativa.",
-      });
-      fetchFuncionarios(); // Recarrega a lista
+      toast({ title: "Sucesso!", description: "Funcionário aprovado." });
+      fetchFuncionarios();
     } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível aprovar o funcionário.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "Não foi possível aprovar o funcionário.", variant: "destructive" });
     }
   };
 
   const handleRemove = async (userId: number) => {
     try {
       await apiClient.delete(`/admin/remover/${userId}`);
-      toast({
-        title: "Sucesso!",
-        description: "O registro foi removido.",
-      });
-      fetchFuncionarios(); // Recarrega a lista
+      toast({ title: "Sucesso!", description: "O registro foi removido." });
+      fetchFuncionarios();
     } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível remover o registro.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "Não foi possível remover o registro.", variant: "destructive" });
     }
   };
 
@@ -90,7 +97,6 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-accent/20 to-primary/10">
-      {/* Header */}
       <header className="bg-card border-b shadow-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -103,7 +109,7 @@ const Admin = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
-             <span className="hidden sm:inline">{userName}</span>
+            <span className="hidden sm:inline">{userName}</span>
             <Button variant="outline" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Sair
@@ -112,10 +118,40 @@ const Admin = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="grid gap-6">
-          {/* Solicitações Pendentes */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Stethoscope className="h-5 w-5" />
+                Sintomas Mais Comuns
+              </CardTitle>
+              <CardDescription>
+                Visualização dos sintomas mais relatados pelos pacientes no chatbot.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {sintomas.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  Ainda não há dados de sintomas para exibir.
+                </p>
+              ) : (
+                <div style={{ width: '100%', height: 300 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={sintomas}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="total" fill="#8884d8" name="Total de Relatos" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -128,31 +164,18 @@ const Admin = () => {
             </CardHeader>
             <CardContent>
               {pendingUsers.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  Nenhuma solicitação pendente
-                </p>
+                <p className="text-center text-muted-foreground py-8">Nenhuma solicitação pendente</p>
               ) : (
                 <div className="space-y-4">
                   {pendingUsers.map((user) => (
-                    <div
-                      key={user.id}
-                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border rounded-lg bg-accent/50"
-                    >
+                    <div key={user.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border rounded-lg bg-accent/50">
                       <div className="flex-1">
                         <h3 className="font-semibold text-foreground">{user.nome}</h3>
                         <p className="text-sm text-muted-foreground mt-1">Email: {user.email}</p>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" onClick={() => handleApprove(user.id)}>
-                          Aprovar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleRemove(user.id)}
-                        >
-                          Rejeitar
-                        </Button>
+                        <Button size="sm" onClick={() => handleApprove(user.id)}>Aprovar</Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleRemove(user.id)}>Rejeitar</Button>
                       </div>
                     </div>
                   ))}
@@ -161,7 +184,6 @@ const Admin = () => {
             </CardContent>
           </Card>
 
-          {/* Funcionários Ativos */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -175,16 +197,11 @@ const Admin = () => {
             <CardContent>
               <div className="space-y-3">
                 {activeStaff.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
-                  >
+                  <div key={member.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
                     <div className="flex items-center gap-3">
                       <Avatar>
                         <AvatarImage src="" />
-                        <AvatarFallback className="bg-secondary text-secondary-foreground">
-                          {member.nome.charAt(0)}
-                        </AvatarFallback>
+                        <AvatarFallback className="bg-secondary text-secondary-foreground">{member.nome.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <div>
                         <p className="font-medium">{member.nome}</p>
@@ -194,11 +211,7 @@ const Admin = () => {
                         </div>
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleRemove(member.id)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => handleRemove(member.id)}>
                       <UserMinus className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>

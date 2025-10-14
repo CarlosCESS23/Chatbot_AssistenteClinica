@@ -90,6 +90,7 @@ async def analyze_symptoms(update: Update,
     """Processa a mensagem de texto, obtém uma resposta JSON da IA e age de acordo."""
     texto_usuario = update.message.text
     chat_id = update.message.chat_id
+    user_id_telegram = update.message.from_user.id # Adicionar esta linha
 
     await context.bot.send_chat_action(chat_id=chat_id, action=telegram.constants.ChatAction.TYPING)
 
@@ -97,6 +98,10 @@ async def analyze_symptoms(update: Update,
         sintomas_identificado = sintomas.extrair_sintomas(texto_usuario)
         logger.info(f'Sintomas identificados para {chat_id}: {sintomas_identificado}')
 
+        id_usuario_db = database.get_user_id(user_id_telegram)
+        if id_usuario_db:
+            database.salvar_sintomas(id_usuario_db, sintomas_identificado)
+            
         prompt_para_ia = f"""
 
         Analise os seguintes sintomas e gere uma resposta JSON conforme as regras do sistema.
@@ -104,6 +109,9 @@ async def analyze_symptoms(update: Update,
         Sintomas descritos pelo usuário: "{texto_usuario}"
         Sintomas-chave extraídos: {sintomas_identificado}
         """
+
+        
+
         response = model.generate_content(prompt_para_ia)
         
         # Limpa a resposta da IA para garantir que seja um JSON válido

@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime, timedelta
+from venv import logger
 
 
 
@@ -221,3 +222,23 @@ def get_user_id(telegram_id):
    
    conexao.close()
    return resultado[0] if resultado else None
+
+
+def salvar_sintomas(id_usuario: int, sintomas: list[str]):
+    """Salva a lista de sintomas para um usuário no banco de dados."""
+    if not sintomas:
+        return
+
+    conexao = sqlite3.connect('clinica.db')
+    cursor = conexao.cursor()
+    
+    dados_para_inserir = [(id_usuario, sintoma) for sintoma in sintomas]
+    
+    try:
+        cursor.executemany("INSERT INTO Sintomas (id_usuario, sintoma) VALUES (?, ?)", dados_para_inserir)
+        conexao.commit()
+        logger.info(f"Sintomas {sintomas} salvos para o usuário ID {id_usuario}.")
+    except sqlite3.Error as e:
+        logger.error(f"Erro ao salvar sintomas para o usuário ID {id_usuario}: {e}")
+    finally:
+        conexao.close()

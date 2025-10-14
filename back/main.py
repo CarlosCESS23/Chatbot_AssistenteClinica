@@ -1,6 +1,6 @@
 import sqlite3
 from fastapi import FastAPI, Depends, HTTPException, status, Query
-from typing import List, Optional
+from typing import Counter, List, Optional
 from telegram import Bot
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -11,7 +11,7 @@ from security import verify_password, create_access_token, get_current_active_ad
 from models import Consulta, Notificacao, Token, FuncionarioCreate, Funcionario, Clinica
 from fastapi.security import OAuth2PasswordRequestForm
 
-load_dotenv("../.env")
+load_dotenv("./.env")
 DATABASE_URL = "../clinica.db"
 
 @asynccontextmanager
@@ -155,3 +155,22 @@ async def enviar_notificacao(notificacao: Notificacao, current_user: dict = Depe
         if "Chat not found" in str(e):
             detail = "Não foi possível enviar a mensagem. O utilizador pode ter bloqueado o bot."
         raise HTTPException(status_code=400, detail=detail)
+    
+
+#Criação de rota para ENDPOINT DE ESTATÍSTICAS
+
+@app.get("/sintomas/stats")
+async def get_sintomas_stats(current_user: dict = Depends(get_current_active_funcionario)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT sintoma FROM Sintomas")
+    sintomas_raw = cursor.fetchall()
+    conn.close()
+
+    todos_sintomas = [row['sintoma'] for row in sintomas_raw]
+    contagem_sintomas = Counter(todos_sintomas)
+    
+    # Formata para o formato que o gráfico espera (ex: { name: 'sintoma', total: 10 })
+    dados_grafico = [{"name": sintoma, "total": contagem} for sintoma, contagem in contagem_sintomas.items()]
+    
+    return dados_grafico
